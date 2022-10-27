@@ -27,8 +27,11 @@ export default function createAsyncQueue<T>() {
     },
     push(value: T) {
       queue.push(value);
-      deferred.resolve();
+
+      const resolve = deferred.resolve.bind(deferred);
+
       deferred = createDeferred();
+      resolve();
     },
     async *[Symbol.asyncIterator]() {
       for (;;) {
