@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import random from 'math-random';
 
-import ImageBitmapDecoder from '../util/ImageBitmapDecoder.js';
+import createAsyncQueue from '../util/createAsyncQueue.js';
 
 const Main = () => {
   const [[width, height], setDimension] = useState<[number, number]>([0, 0]);
@@ -11,16 +11,9 @@ const Main = () => {
 
   const handleChange = useCallback(
     async ({ target: { files } }) => {
-      const decoder = new ImageBitmapDecoder();
+      const firstImageBitmap = await createImageBitmap(files[0]);
 
-      try {
-        const firstImage = await decoder.decode(files[0]);
-
-        setDimension([firstImage.width, firstImage.height]);
-      } finally {
-        decoder.close();
-      }
-
+      setDimension([firstImageBitmap.width, firstImageBitmap.height]);
       setFiles([...files].sort(({ name: x }, { name: y }) => (x > y ? 1 : x < y ? -1 : 0)));
     },
     [setDimension, setFiles]
@@ -32,10 +25,10 @@ const Main = () => {
     }
 
     const fileHandle = await window.showSaveFilePicker({
-      suggestedName: `timelapse-${random().toString(36).substr(2, 7)}.mp4`,
+      suggestedName: `timelapse-${random().toString(36).substr(2, 7)}.webm`,
       types: [
         {
-          accept: { 'video/mp4': ['.mp4'] }
+          accept: { 'video/webm': ['.webm'] }
         }
       ]
     });
@@ -65,34 +58,78 @@ const Main = () => {
       videoBitsPerSecond: 20_000_000
     });
 
-    recorder.addEventListener('dataavailable', async ({ data }) => {
-      await writable.write({ type: 'write', data });
+    const worker = new Worker('./static/js/worker.js');
+
+    // Serializes all async calls so we don't put too much stress on the writable.
+    const asyncQueue = createAsyncQueue<
+      | ['dataavailable', Blob]
+      | ['decode error', Error]
+      | ['decoded', ImageBitmap]
+      | ['record error', DOMException]
+      | ['stop']
+    >();
+
+    recorder.addEventListener('error', ({ error }) => {
+      asyncQueue.push(['record error', error]);
     });
 
-    recorder.addEventListener('stop', async () => {
-      await writable.close();
-
-      setBusy(false);
+    recorder.addEventListener('dataavailable', ({ data }) => {
+      asyncQueue.push(['dataavailable', data]);
     });
+
+    recorder.addEventListener('stop', () => {
+      asyncQueue.push(['stop']);
+    });
+
+    worker.addEventListener('message', ({ data: [type, data] }) => {
+      if (type === 'decoded') {
+        asyncQueue.push([type, data]);
+      } else if (type === 'decode error') {
+        asyncQueue.push([type, new Error(data)]);
+      }
+    });
+
+    let index = 0;
+    const pendingFiles = [...files];
 
     recorder.start();
+    worker.postMessage(['decode', pendingFiles.shift()]);
 
-    const decoder = new ImageBitmapDecoder();
+    for await (const item of asyncQueue) {
+      if (!item) {
+        break;
+      }
 
-    try {
-      for (let index = 0; index < files.length; index++) {
-        const file = files[index];
+      const [type, payload] = item;
 
-        context.drawImage(await decoder.decode(file), 0, 0);
+      if (type === 'dataavailable') {
+        await writable.write({ type: 'write', data: payload });
+      } else if (type === 'stop') {
+        await writable.close();
+        setBusy(false);
+
+        asyncQueue.close();
+      } else if (type === 'decoded') {
+        context.drawImage(await payload, 0, 0);
         track.requestFrame();
 
-        setNumFramesProcessed(index + 1);
-      }
-    } finally {
-      decoder.close();
-    }
+        setNumFramesProcessed(++index);
 
-    recorder.stop();
+        const blob = pendingFiles.shift();
+
+        if (blob) {
+          worker.postMessage(['decode', blob]);
+        } else {
+          recorder.stop();
+        }
+      } else if (type === 'decode error') {
+        recorder.stop();
+
+        alert('Failed to decode image, aborting.');
+      } else if (type === 'record error') {
+        alert('Failed to record, aborting.');
+      }
+    }
   }, [files, height, setBusy, setNumFramesProcessed, width]);
 
   return (

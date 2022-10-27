@@ -1,14 +1,12 @@
-addEventListener('message', async ({ data: { payload, type } }) => {
+addEventListener('message', async ({ data: [type, blob] }) => {
   switch (type) {
     case 'decode':
-      const { id } = payload;
-
       try {
-        const imageBitmap = await createImageBitmap(payload.blob);
+        const imageBitmap = await createImageBitmap(blob);
 
-        postMessage({ payload: { id, imageBitmap }, type: 'decoded' }, [imageBitmap]);
+        postMessage(['decoded', imageBitmap], [imageBitmap]);
       } catch ({ message }) {
-        postMessage({ payload: { error: message, id }, type: 'decode error' });
+        postMessage(['decode error', message]);
       }
 
       break;
