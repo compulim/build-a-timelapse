@@ -1,0 +1,24 @@
+{
+  "name": "timelapse-web",
+  "version": "0.0.0-0",
+  "description": "",
+  "private": true,
+  "scripts": {
+    "build": "esbuild --bundle --outdir=./public/static/js/ --sourcemap ./src/main.tsx",
+    "start": "npm run build -- --servedir=./public"
+  },
+  "author": "William Wong (https://github.com/compulim)",
+  "license": "MIT",
+  "devDependencies": {
+    "esbuild": "^0.15.12"
+  },
+  "dependencies": {
+    "@emotion/css": "11.10.0",
+    "@types/react": "18.0.23",
+    "@types/react-dom": "18.0.7",
+    "classnames": "2.3.2",
+    "math-random": "2.0.1",
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  }
+}
