@@ -24,11 +24,20 @@ export default class ImageBitmapDecoder {
   #worker: Worker;
 
   async decode(blob: Blob): Promise<ImageBitmap> {
+    if (!this.#worker) {
+      throw new Error('ImageBitmapDecoder has already closed.');
+    }
+
     const id = uniqueID();
 
     return new Promise((resolve, reject) => {
       this.#decodings.set(id, { reject, resolve });
       this.#worker.postMessage({ payload: { id, blob }, type: 'decode' });
     });
+  }
+
+  close() {
+    this.#decodings.clear();
+    this.#worker.terminate();
   }
 }

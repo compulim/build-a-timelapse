@@ -1,20 +1,29 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import random from 'math-random';
 
 import ImageBitmapDecoder from '../util/ImageBitmapDecoder.js';
 
 const Main = () => {
+  const [[width, height], setDimension] = useState<[number, number]>([0, 0]);
   const [busy, setBusy] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
-  const [[width, height], setDimension] = useState<[number, number]>([0, 0]);
   const [numFramesProcessed, setNumFramesProcessed] = useState(0);
-  const writableRef = useRef();
 
   const handleChange = useCallback(
-    async event => {
-      setFiles([...event.target.files].sort(({ name: x }, { name: y }) => (x > y ? 1 : x < y ? -1 : 0)));
+    async ({ target: { files } }) => {
+      const decoder = new ImageBitmapDecoder();
+
+      try {
+        const firstImage = await decoder.decode(files[0]);
+
+        setDimension([firstImage.width, firstImage.height]);
+      } finally {
+        decoder.close();
+      }
+
+      setFiles([...files].sort(({ name: x }, { name: y }) => (x > y ? 1 : x < y ? -1 : 0)));
     },
-    [setFiles, writableRef]
+    [setDimension, setFiles]
   );
 
   const handleStart = useCallback(async () => {
@@ -37,19 +46,11 @@ const Main = () => {
 
     setBusy(true);
 
-    const decoder = new ImageBitmapDecoder();
+    const canvas = document.createElement('canvas');
     const writable = await fileHandle.createWritable();
 
-    const canvas = document.createElement('canvas');
-
-    const [firstFile] = files;
-
-    const firstImage = await decoder.decode(firstFile);
-
-    canvas.height = firstImage.height;
-    canvas.width = firstImage.width;
-
-    setDimension([firstImage.width, firstImage.height]);
+    canvas.height = height;
+    canvas.width = width;
 
     const context = canvas.getContext('2d');
 
@@ -76,22 +77,28 @@ const Main = () => {
 
     recorder.start();
 
-    for (let index = 0; index < files.length; index++) {
-      const file = files[index];
+    const decoder = new ImageBitmapDecoder();
 
-      context.drawImage(await decoder.decode(file), 0, 0);
-      track.requestFrame();
+    try {
+      for (let index = 0; index < files.length; index++) {
+        const file = files[index];
 
-      setNumFramesProcessed(index + 1);
+        context.drawImage(await decoder.decode(file), 0, 0);
+        track.requestFrame();
+
+        setNumFramesProcessed(index + 1);
+      }
+    } finally {
+      decoder.close();
     }
 
     recorder.stop();
-  }, [files, setBusy, setDimension, setNumFramesProcessed]);
+  }, [files, height, setBusy, setNumFramesProcessed, width]);
 
   return (
     <section role="main">
-      <h1>Build a timelapse</h1>
-      <input accept="image/jpeg" multiple onChange={handleChange} type="file" />
+      <h1>Build-a-timelapse</h1>
+      <input accept="image/jpeg" disabled={busy} multiple onChange={handleChange} type="file" />
       <dl>
         <dt>Total number of files</dt>
         <dd>{files.length}</dd>
