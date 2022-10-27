@@ -128,6 +128,17 @@ const Main = () => {
   return (
     <section role="main">
       <h1>Build-a-timelapse</h1>
+      <p>
+        Build a timelapse video from multiple photos within your browser locally. Your photos will not be uploaded
+        anywhere.
+      </p>
+      <hr />
+      <p>Notes:</p>
+      <ul>
+        <li>Photos will be sorted by their file names</li>
+        <li>Video size will be based on the size of the first photo</li>
+        <li>Video will be encoded at 20 Mbps using h.264 in WebM container at 30 FPS</li>
+      </ul>
       <input accept="image/jpeg" disabled={busy} multiple onChange={handleChange} type="file" />
       <dl>
         <dt>Total number of files</dt>
