@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import random from 'math-random';
 
 import decodeAsImage from '../util/decodeAsImage.js';
@@ -84,7 +84,7 @@ const Main = () => {
 
   return (
     <section role="main">
-      <h1>Make a timelapse</h1>
+      <h1>Build a timelapse</h1>
       <input accept="image/jpeg" multiple onChange={handleChange} type="file" />
       <dl>
         <dt>Total number of files</dt>
