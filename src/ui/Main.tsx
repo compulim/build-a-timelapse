@@ -61,6 +61,7 @@ const Main = () => {
     const worker = new Worker('./static/js/worker.js');
 
     // Serializes all async calls so we don't put too much stress on the writable.
+    // Observable is almost great for this job, but it is not waiting on the next() function.
     const asyncQueue = createAsyncQueue<
       | ['dataavailable', Blob]
       | ['decode error', Error]
@@ -69,17 +70,9 @@ const Main = () => {
       | ['stop']
     >();
 
-    recorder.addEventListener('error', ({ error }) => {
-      asyncQueue.push(['record error', error]);
-    });
-
-    recorder.addEventListener('dataavailable', ({ data }) => {
-      asyncQueue.push(['dataavailable', data]);
-    });
-
-    recorder.addEventListener('stop', () => {
-      asyncQueue.push(['stop']);
-    });
+    recorder.addEventListener('error', ({ error }) => asyncQueue.push(['record error', error]));
+    recorder.addEventListener('dataavailable', ({ data }) => asyncQueue.push(['dataavailable', data]));
+    recorder.addEventListener('stop', () => asyncQueue.push(['stop']));
 
     worker.addEventListener('message', ({ data: [type, data] }) => {
       if (type === 'decoded') {
