@@ -4,7 +4,7 @@
   "description": "",
   "private": true,
   "scripts": {
-    "build": "esbuild --bundle --outdir=./public/static/js/ --sourcemap ./src/main.tsx",
+    "build": "esbuild --bundle --outdir=./public/static/js/ --sourcemap ./src/main.tsx ./src/worker.ts",
     "start": "npm run build -- --servedir=./public"
   },
   "author": "William Wong (https://github.com/compulim)",

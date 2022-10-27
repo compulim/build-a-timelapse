@@ -1,7 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import random from 'math-random';
 
-import decodeAsImage from '../util/decodeAsImage.js';
+import ImageBitmapDecoder from '../util/ImageBitmapDecoder.js';
 
 const Main = () => {
   const [busy, setBusy] = useState(false);
@@ -37,13 +37,14 @@ const Main = () => {
 
     setBusy(true);
 
+    const decoder = new ImageBitmapDecoder();
     const writable = await fileHandle.createWritable();
 
     const canvas = document.createElement('canvas');
 
     const [firstFile] = files;
 
-    const firstImage = await decodeAsImage(firstFile);
+    const firstImage = await decoder.decode(firstFile);
 
     canvas.height = firstImage.height;
     canvas.width = firstImage.width;
@@ -51,6 +52,11 @@ const Main = () => {
     setDimension([firstImage.width, firstImage.height]);
 
     const context = canvas.getContext('2d');
+
+    if (!context) {
+      throw new Error('Failed to get 2D context.');
+    }
+
     const stream = canvas.captureStream(0);
     const [track] = stream.getVideoTracks() as [CanvasCaptureMediaStreamTrack];
     const recorder = new MediaRecorder(stream, {
@@ -73,7 +79,7 @@ const Main = () => {
     for (let index = 0; index < files.length; index++) {
       const file = files[index];
 
-      context?.drawImage(await decodeAsImage(file), 0, 0);
+      context.drawImage(await decoder.decode(file), 0, 0);
       track.requestFrame();
 
       setNumFramesProcessed(index + 1);
@@ -93,8 +99,12 @@ const Main = () => {
         <dd>
           {width} &times; {height}
         </dd>
-        <dt>Number of frames processed</dt>
-        <dd>{busy ? `${numFramesProcessed}/${files.length}` : 'Done'}</dd>
+        <dt>Number of files processed</dt>
+        <dd>
+          {busy
+            ? `${numFramesProcessed}/${files.length} (${Math.ceil((numFramesProcessed / files.length) * 100)}%)`
+            : 'Done'}
+        </dd>
       </dl>
       <button disabled={busy || !files.length} onClick={handleStart} type="button">
         Start
