@@ -4,6 +4,8 @@ import random from 'math-random';
 
 import createAsyncQueue from '../util/createAsyncQueue.js';
 
+import type { DecodeWorker } from '../types/DecodeWorker.js';
+
 declare global {
   interface Window {
     showSaveFilePicker(options: {
@@ -138,7 +140,7 @@ const Main = () => {
       videoBitsPerSecond: 20_000_000
     });
 
-    const worker = new Worker('./static/js/worker.js');
+    const worker = new Worker('./static/js/worker.js') as DecodeWorker;
 
     // Serializes all async calls so we don't put too much stress on the writable.
     // Observable is almost great for this job, but it is not waiting on the next() function.
@@ -154,11 +156,14 @@ const Main = () => {
     recorder.addEventListener('dataavailable', ({ data }) => asyncQueue.push(['dataavailable', data]));
     recorder.addEventListener('stop', () => asyncQueue.push(['stop']));
 
-    worker.addEventListener('message', ({ data: [type, data, name] }) => {
+    worker.addEventListener('message', ({ data }) => {
+      // We have to destruct it here instead of in function arguments because TypeScript does not narrow.
+      const [type, payload, name] = data;
+
       if (type === 'decoded') {
-        asyncQueue.push([type, [data, name]]);
+        asyncQueue.push([type, [payload, name]]);
       } else if (type === 'decode error') {
-        asyncQueue.push([type, new Error(data)]);
+        asyncQueue.push([type, new Error(payload)]);
       }
     });
 
