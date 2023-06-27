@@ -1,4 +1,12 @@
-import { FileSystemWritableFileStreamTarget, Muxer } from 'webm-muxer';
+import {
+  FileSystemWritableFileStreamTarget as MPEG4FileSystemWritableFileStreamTarget,
+  Muxer as MPEG4Muxer
+} from 'mp4-muxer';
+
+import {
+  FileSystemWritableFileStreamTarget as WebMFileSystemWritableFileStreamTarget,
+  Muxer as WebMMuxer
+} from 'webm-muxer';
 
 import { READY_STATE_BUSY, READY_STATE_IDLE } from './types/MuxerReadyState';
 import decodeImageAsImageBitmap from './util/decodeImageAsImageBitmap';
@@ -23,23 +31,17 @@ import type { ReadyState } from './types/MuxerReadyState';
 //   framerate: FRAMERATE
 // };
 
-const MUXER_CONFIG = {
-  codec: 'V_VP9'
-};
-
-const VIDEO_ENCODER_CONFIG = {
-  codec: 'vp09.00.10.08'
-};
-
 export default class WebCodecsMuxer extends EventTarget implements IMuxer {
-  constructor({ bitRate, frameRate }: { bitRate: number; frameRate: number }) {
+  constructor({ bitRate, codec, frameRate }: { bitRate: number; codec: 'h264' | 'vp9'; frameRate: number }) {
     super();
 
     this.#bitRate = bitRate;
+    this.#codec = codec;
     this.#frameRate = frameRate;
   }
 
   #bitRate: number;
+  #codec: 'h264' | 'vp9';
   #frameRate: number;
   #numBytesWritten: number = 0;
   #numFlushes: number = 0;
@@ -88,7 +90,9 @@ export default class WebCodecsMuxer extends EventTarget implements IMuxer {
         const context = canvas.getContext('2d');
 
         const config: VideoEncoderConfig = {
-          ...VIDEO_ENCODER_CONFIG,
+          // h.264 Level 5.1 = 4K
+          // https://en.wikipedia.org/wiki/Advanced_Video_Coding#Levels
+          codec: this.#codec === 'h264' ? 'avc1.420033' : 'vp09.00.10.08',
           bitrate: this.#bitRate,
           framerate: this.#frameRate,
           height,
@@ -106,10 +110,16 @@ export default class WebCodecsMuxer extends EventTarget implements IMuxer {
         const stream = await fileHandle.createWritable();
 
         try {
-          const muxer = new Muxer({
-            target: new FileSystemWritableFileStreamTarget(stream),
-            video: { ...MUXER_CONFIG, height, width }
-          });
+          const muxer =
+            this.#codec === 'h264'
+              ? new MPEG4Muxer({
+                  target: new MPEG4FileSystemWritableFileStreamTarget(stream),
+                  video: { codec: 'avc', height, width }
+                })
+              : new WebMMuxer({
+                  target: new WebMFileSystemWritableFileStreamTarget(stream),
+                  video: { codec: 'V_VP9', height, width }
+                });
 
           try {
             const videoEncoder = new VideoEncoder({

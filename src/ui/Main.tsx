@@ -30,8 +30,8 @@ const PERFORMANCE_WINDOW_SIZE = 30;
 
 const Main = () => {
   const [[width, height], setDimension] = useState<[number, number]>([0, 0]);
-  const [bitrate, setBitrate] = useState<'20000000' | '100000000'>('20000000');
-  const [codec, setCodec] = useState<'h264' | 'vp9'>('vp9');
+  const [bitRate, setBitRate] = useState<'20000000' | '100000000'>('20000000');
+  const [codec, setCodec] = useState<'h264-mr' | 'h264-wc' | 'vp9'>('h264-wc');
   const [files, setFiles] = useState<Map<string, File>>(new Map());
   const [frameRate, setFrameRate] = useState<string>('29.97');
   const [savedFilename, setSavedFilename] = useState<string>('');
@@ -40,10 +40,12 @@ const Main = () => {
   const lastProgressRef = useRef(0);
   const muxer = useMemo(
     () =>
-      codec === 'h264'
-        ? new MediaRecorderMuxer({ bitRate: +bitrate })
-        : new WebCodecsMuxer({ bitRate: +bitrate, frameRate: +frameRate }),
-    [bitrate, codec, frameRate]
+      codec === 'h264-mr'
+        ? new MediaRecorderMuxer({ bitRate: +bitRate })
+        : codec === 'h264-wc'
+        ? new WebCodecsMuxer({ bitRate: +bitRate, codec: 'h264', frameRate: +frameRate })
+        : new WebCodecsMuxer({ bitRate: +bitRate, codec: 'vp9', frameRate: +frameRate }),
+    [bitRate, codec, frameRate]
   );
   const performanceWindowRef = useRef<number[]>([]);
 
@@ -167,12 +169,12 @@ const Main = () => {
   );
 
   const handleBitrateChange = useCallback<FormEventHandler<HTMLInputElement>>(
-    ({ currentTarget: { value } }) => setBitrate(value as '20000000' | '100000000'),
-    [setBitrate]
+    ({ currentTarget: { value } }) => setBitRate(value as '20000000' | '100000000'),
+    [setBitRate]
   );
 
   const handleCodecChange = useCallback<FormEventHandler<HTMLInputElement>>(
-    ({ currentTarget: { value } }) => setCodec(value as 'h264' | 'vp9'),
+    ({ currentTarget: { value } }) => setCodec(value as 'h264-mr' | 'h264-wc' | 'vp9'),
     [setCodec, setFrameRate]
   );
 
@@ -195,7 +197,7 @@ const Main = () => {
     }
 
     const fileHandle = await window.showSaveFilePicker({
-      suggestedName: `timelapse-${random().toString(36).substr(2, 7)}-${codec}.webm`,
+      suggestedName: `timelapse-${random().toString(36).substr(2, 7)}-${codec}.${codec === 'h264-wc' ? 'mp4' : 'webm'}`,
       types: [
         {
           accept: { 'video/webm': ['.webm'] }
@@ -222,6 +224,7 @@ const Main = () => {
   const millsecondsElapsed = Date.now() - startTime;
   const started = !!startTime;
   const timelapseDuration = numFiles / +frameRate;
+  const currentBitRate = (numBytesWritten * 8) / (numFramesProcessed / +frameRate);
 
   return (
     <main>
@@ -237,15 +240,20 @@ const Main = () => {
         <li>Multiple batches of photos can be added to a single timelapse</li>
         <li>Video size will be based on the size of the first photo</li>
         <li>
-          Video will be encoded at {bitrate === '100000000' ? '100' : '20'} Mbps using{' '}
-          {codec === 'h264' ? 'h.264' : 'VP9'} in WebM container at {frameRate} FPS
+          Video will be encoded at {bitRate === '100000000' ? '100' : '20'} Mbps using{' '}
+          {codec === 'h264-mr' || codec === 'h264-wc' ? 'h.264' : 'VP9'} in {codec === 'h264-wc' ? 'MP4' : 'WebM'}{' '}
+          container at {frameRate} FPS
         </li>
       </ul>
       <p>
         Codec:{' '}
         <label>
-          <input checked={codec === 'h264'} onChange={handleCodecChange} type="radio" value="h264" />
-          h.264
+          <input checked={codec === 'h264-mr'} onChange={handleCodecChange} type="radio" value="h264-mr" />
+          h.264 (Media Recorder)
+        </label>
+        <label>
+          <input checked={codec === 'h264-wc'} onChange={handleCodecChange} type="radio" value="h264-wc" />
+          h.264 (WebCodecs)
         </label>
         <label>
           <input checked={codec === 'vp9'} onChange={handleCodecChange} type="radio" value="vp9" />
@@ -253,13 +261,13 @@ const Main = () => {
         </label>
       </p>
       <p>
-        Bitrate:{' '}
+        Bit rate:{' '}
         <label>
-          <input checked={bitrate === '20000000'} onChange={handleBitrateChange} type="radio" value="20000000" />
+          <input checked={bitRate === '20000000'} onChange={handleBitrateChange} type="radio" value="20000000" />
           20 Mbps
         </label>
         <label>
-          <input checked={bitrate === '100000000'} onChange={handleBitrateChange} type="radio" value="100000000" />
+          <input checked={bitRate === '100000000'} onChange={handleBitrateChange} type="radio" value="100000000" />
           100 Mbps
         </label>
       </p>
@@ -267,8 +275,8 @@ const Main = () => {
         Frame rate:{' '}
         <label>
           <input
-            checked={codec === 'h264' || frameRate === '29.97'}
-            disabled={codec === 'h264'}
+            checked={codec === 'h264-mr' || frameRate === '29.97'}
+            disabled={codec === 'h264-mr'}
             onChange={handleFrameRateChange}
             type="radio"
             value="29.97"
@@ -277,8 +285,8 @@ const Main = () => {
         </label>
         <label>
           <input
-            checked={codec !== 'h264' && frameRate === '60'}
-            disabled={codec === 'h264'}
+            checked={codec !== 'h264-mr' && frameRate === '60'}
+            disabled={codec === 'h264-mr'}
             onChange={handleFrameRateChange}
             type="radio"
             value="60"
@@ -287,8 +295,8 @@ const Main = () => {
         </label>
         <label>
           <input
-            checked={codec !== 'h264' && frameRate === '120'}
-            disabled={codec === 'h264'}
+            checked={codec !== 'h264-mr' && frameRate === '120'}
+            disabled={codec === 'h264-mr'}
             onChange={handleFrameRateChange}
             type="radio"
             value="120"
@@ -313,6 +321,14 @@ const Main = () => {
         </dd>
         <dt>Timelapse duration</dt>
         <dd>{timelapseDuration.toFixed(1)} seconds</dd>
+        <dt>File size</dt>
+        <dd>
+          {busy
+            ? `${bytes((currentBitRate * timelapseDuration) / 8)} (Estimated)`
+            : started
+            ? `${bytes(numBytesWritten)} (Final)`
+            : `${bytes((+bitRate * timelapseDuration) / 8)} (Projected)`}
+        </dd>
         <dt>Number of files processed</dt>
         <dd>
           {busy
@@ -323,13 +339,7 @@ const Main = () => {
         </dd>
         <dt>Bytes written</dt>
         <dd>
-          {started
-            ? `${bytes(numBytesWritten)} in ${numFlushes} batches (${(
-                (numBytesWritten * 8) /
-                1048576 /
-                timelapseDuration
-              ).toFixed(1)} Mbps)`
-            : 'Not started'}
+          {started ? `${bytes(numBytesWritten)} in ${numFlushes} batches (${bytes(currentBitRate)}ps)` : 'Not started'}
         </dd>
         <dt>Average time to process a frame (from last {PERFORMANCE_WINDOW_SIZE} frames)</dt>
         <dd>
