@@ -1,10 +1,16 @@
 import bytes from 'bytes';
-import React, { FormEventHandler, useCallback, useMemo, useRef, useState } from 'react';
+import React, {
+  FormEventHandler,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore
+} from 'react';
 import random from 'math-random';
 
-import createAsyncQueue from '../util/createAsyncQueue.js';
-
-import type { DecodeWorker } from '../types/DecodeWorker.js';
+import ImageMuxer from '../ImageMuxer.js';
 
 declare global {
   interface Window {
@@ -21,12 +27,52 @@ declare global {
 
 const Main = () => {
   const [[width, height], setDimension] = useState<[number, number]>([0, 0]);
-  const [busy, setBusy] = useState(false);
   const [files, setFiles] = useState<Map<string, File>>(new Map());
-  const [numBytesWritten, setNumBytesWritten] = useState(0);
-  const [numFlush, setNumFlush] = useState(0);
-  const [numFramesProcessed, setNumFramesProcessed] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const imageMuxer = useMemo(() => new ImageMuxer(), []);
+
+  const imageMuxerSubscribe = useCallback<(onStoreChange: () => void) => () => void>(
+    callback => {
+      imageMuxer.addEventListener('start', callback);
+      imageMuxer.addEventListener('end', callback);
+      imageMuxer.addEventListener('progress', callback);
+
+      return () => {
+        imageMuxer.removeEventListener('start', callback);
+        imageMuxer.removeEventListener('end', callback);
+        imageMuxer.removeEventListener('progress', callback);
+      };
+    },
+    [imageMuxer]
+  );
+
+  useEffect(() => {
+    const handleError: EventListener = event => alert((event as ErrorEvent).message);
+
+    imageMuxer.addEventListener('error', handleError);
+
+    return () => imageMuxer.removeEventListener('error', handleError);
+  }, [imageMuxer]);
+
+  const numBytesWritten = useSyncExternalStore(
+    imageMuxerSubscribe,
+    useCallback(() => imageMuxer.numBytesWritten, [imageMuxer])
+  );
+
+  const numFlushes = useSyncExternalStore(
+    imageMuxerSubscribe,
+    useCallback(() => imageMuxer.numFlushes, [imageMuxer])
+  );
+
+  const numFramesProcessed = useSyncExternalStore(
+    imageMuxerSubscribe,
+    useCallback(() => imageMuxer.numFramesProcessed, [imageMuxer])
+  );
+
+  const readyState = useSyncExternalStore(
+    imageMuxerSubscribe,
+    useCallback(() => imageMuxer.readyState, [imageMuxer])
+  );
 
   const numBytesOriginal = useMemo(() => {
     let nextNumBytesOriginal = 0;
@@ -90,9 +136,7 @@ const Main = () => {
     [setDimension, setFiles]
   );
 
-  const handleClearAllFilesClick = useCallback(() => {
-    setFiles(new Map());
-  }, [setFiles]);
+  const handleClearAllFilesClick = useCallback(() => setFiles(new Map()), [setFiles]);
 
   const handleStart = useCallback(async () => {
     if (!sortedFiles.length) {
@@ -118,112 +162,11 @@ const Main = () => {
       return;
     }
 
-    setBusy(true);
-    setNumBytesWritten(0);
-    setNumFlush(0);
-
-    const writable = await fileHandle.createWritable();
-
-    canvas.height = height;
-    canvas.width = width;
-
-    const context = canvas.getContext('2d');
-
-    if (!context) {
-      throw new Error('Failed to get 2D context.');
-    }
-
-    const stream = canvas.captureStream(0);
-    const [track] = stream.getVideoTracks() as [CanvasCaptureMediaStreamTrack];
-    const recorder = new MediaRecorder(stream, {
-      mimeType: 'video/webm;codecs=h264',
-      videoBitsPerSecond: 20_000_000
-    });
-
-    const worker = new Worker('./static/js/worker.js') as DecodeWorker;
-
-    // Serializes all async calls so we don't put too much stress on the writable.
-    // Observable is almost great for this job, but it is not waiting on the next() function.
-    const asyncQueue = createAsyncQueue<
-      | ['dataavailable', Blob]
-      | ['decode error', Error]
-      | ['decoded', [ImageBitmap, string]]
-      | ['record error', DOMException]
-      | ['stop']
-    >();
-
-    recorder.addEventListener('error', event => asyncQueue.push(['record error', (event as any).error]));
-    recorder.addEventListener('dataavailable', ({ data }) => asyncQueue.push(['dataavailable', data]));
-    recorder.addEventListener('stop', () => asyncQueue.push(['stop']));
-
-    worker.addEventListener('message', ({ data }) => {
-      // We have to destruct it here instead of in function arguments because TypeScript does not narrow.
-      const [type, payload, name] = data;
-
-      if (type === 'decoded') {
-        asyncQueue.push([type, [payload, name]]);
-      } else if (type === 'decode error') {
-        asyncQueue.push([type, new Error(payload)]);
-      }
-    });
-
-    let index = 0;
-    const pendingFiles = [...sortedFiles];
-
-    recorder.start();
-    worker.postMessage(['decode', pendingFiles.shift()]);
-
-    for await (const item of asyncQueue) {
-      if (!item) {
-        break;
-      }
-
-      const [type, payload] = item;
-
-      if (type === 'dataavailable') {
-        await writable.write({ type: 'write', data: payload });
-
-        setNumBytesWritten(numBytesWritten => numBytesWritten + payload.size);
-        setNumFlush(numFlush => numFlush + 1);
-      } else if (type === 'stop') {
-        await writable.close();
-        setBusy(false);
-
-        asyncQueue.close();
-      } else if (type === 'decoded') {
-        const [imageBitmap, name] = payload;
-
-        if (imageBitmap.height !== height || imageBitmap.width !== width) {
-          recorder.stop();
-
-          alert(
-            `Failed to draw snapshot "${name}".\n\nResolution is ${imageBitmap.width} × ${imageBitmap.height}, expected ${width} × ${height}.`
-          );
-        } else {
-          context.drawImage(imageBitmap, 0, 0);
-          track.requestFrame();
-
-          setNumFramesProcessed(++index);
-
-          const blob = pendingFiles.shift();
-
-          if (blob) {
-            worker.postMessage(['decode', blob]);
-          } else {
-            recorder.stop();
-          }
-        }
-      } else if (type === 'decode error') {
-        recorder.stop();
-
-        alert('Failed to decode image, aborting.');
-      } else if (type === 'record error') {
-        alert('Failed to record, aborting.');
-      }
-    }
-  }, [height, setBusy, setNumBytesWritten, setNumFlush, setNumFramesProcessed, sortedFiles, width]);
+    imageMuxer.start(sortedFiles, fileHandle, canvas, width, height);
+  }, [height, imageMuxer, sortedFiles, width]);
 
   const { size: numFiles } = files;
+  const busy = !!readyState;
 
   return (
     <main>
@@ -255,13 +198,15 @@ const Main = () => {
         <dd>
           {width} &times; {height}
         </dd>
+        <dt>Durartion</dt>
+        <dd>{(numFiles / 30).toFixed(1)} seconds</dd>
         <dt>Number of files processed</dt>
         <dd>
           {busy ? `${numFramesProcessed}/${numFiles} (${Math.ceil((numFramesProcessed / numFiles) * 100)}%)` : 'Done'}
         </dd>
         <dt>Bytes written</dt>
         <dd>
-          {bytes(numBytesWritten)} in {numFlush} batches
+          {bytes(numBytesWritten)} in {numFlushes} batches
         </dd>
       </dl>
       {!!groupedFiles.length && (
