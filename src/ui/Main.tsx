@@ -1,4 +1,4 @@
-import React, { FormEventHandler, useCallback, useState } from 'react';
+import React, { FormEventHandler, useCallback, useMemo, useState } from 'react';
 import random from 'math-random';
 
 import createAsyncQueue from '../util/createAsyncQueue.js';
@@ -21,6 +21,11 @@ const Main = () => {
   const [busy, setBusy] = useState(false);
   const [files, setFiles] = useState<Map<string, File>>(new Map());
   const [numFramesProcessed, setNumFramesProcessed] = useState(0);
+
+  const sortedFiles = useMemo(
+    () => Array.from(files.values()).sort(({ name: x }, { name: y }) => (x > y ? 1 : x < y ? -1 : 0)),
+    [files]
+  );
 
   const handleChange = useCallback<FormEventHandler<HTMLInputElement>>(
     async ({ currentTarget: { files } }) => {
@@ -49,7 +54,7 @@ const Main = () => {
   }, [setFiles]);
 
   const handleStart = useCallback(async () => {
-    if (!files.size) {
+    if (!sortedFiles.length) {
       return;
     }
 
@@ -112,7 +117,7 @@ const Main = () => {
     });
 
     let index = 0;
-    const pendingFiles = Array.from(files.values()).sort(({ name: x }, { name: y }) => (x > y ? 1 : x < y ? -1 : 0));
+    const pendingFiles = [...sortedFiles];
 
     recorder.start();
     worker.postMessage(['decode', pendingFiles.shift()]);
@@ -152,7 +157,7 @@ const Main = () => {
         alert('Failed to record, aborting.');
       }
     }
-  }, [files, height, setBusy, setNumFramesProcessed, width]);
+  }, [height, setBusy, setNumFramesProcessed, sortedFiles, width]);
 
   const { size: numFiles } = files;
 
@@ -191,8 +196,17 @@ const Main = () => {
           {busy ? `${numFramesProcessed}/${numFiles} (${Math.ceil((numFramesProcessed / numFiles) * 100)}%)` : 'Done'}
         </dd>
       </dl>
+      <details>
+        <summary>List of all files</summary>
+        <ul>
+          {sortedFiles.map(({ name }) => (
+            <li>{name}</li>
+          ))}
+        </ul>
+      </details>
+      <hr />
       <button disabled={busy || !numFiles} onClick={handleStart} type="button">
-        Start
+        Build timelapse
       </button>
     </main>
   );
