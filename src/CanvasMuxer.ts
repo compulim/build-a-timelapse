@@ -5,7 +5,7 @@ import type { DecodeWorker } from './types/DecodeWorker';
 import type { Muxer } from './types/Muxer';
 import type { ReadyState } from './types/MuxerReadyState';
 
-export default class ImageMuxer extends EventTarget implements Muxer {
+export default class CanvasMuxer extends EventTarget implements Muxer {
   #numBytesWritten: number = 0;
   #numFlushes: number = 0;
   #numFramesProcessed: number = 0;

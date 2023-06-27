@@ -10,7 +10,7 @@ import React, {
 } from 'react';
 import random from 'math-random';
 
-import ImageMuxer from '../ImageMuxer.js';
+import CanvasMuxer from '../CanvasMuxer.js';
 
 declare global {
   interface Window {
@@ -29,49 +29,49 @@ const Main = () => {
   const [[width, height], setDimension] = useState<[number, number]>([0, 0]);
   const [files, setFiles] = useState<Map<string, File>>(new Map());
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const imageMuxer = useMemo(() => new ImageMuxer(), []);
+  const muxer = useMemo(() => new CanvasMuxer(), []);
 
   const imageMuxerSubscribe = useCallback<(onStoreChange: () => void) => () => void>(
     callback => {
-      imageMuxer.addEventListener('start', callback);
-      imageMuxer.addEventListener('end', callback);
-      imageMuxer.addEventListener('progress', callback);
+      muxer.addEventListener('start', callback);
+      muxer.addEventListener('end', callback);
+      muxer.addEventListener('progress', callback);
 
       return () => {
-        imageMuxer.removeEventListener('start', callback);
-        imageMuxer.removeEventListener('end', callback);
-        imageMuxer.removeEventListener('progress', callback);
+        muxer.removeEventListener('start', callback);
+        muxer.removeEventListener('end', callback);
+        muxer.removeEventListener('progress', callback);
       };
     },
-    [imageMuxer]
+    [muxer]
   );
 
   useEffect(() => {
     const handleError: EventListener = event => alert((event as ErrorEvent).message);
 
-    imageMuxer.addEventListener('error', handleError);
+    muxer.addEventListener('error', handleError);
 
-    return () => imageMuxer.removeEventListener('error', handleError);
-  }, [imageMuxer]);
+    return () => muxer.removeEventListener('error', handleError);
+  }, [muxer]);
 
   const numBytesWritten = useSyncExternalStore(
     imageMuxerSubscribe,
-    useCallback(() => imageMuxer.numBytesWritten, [imageMuxer])
+    useCallback(() => muxer.numBytesWritten, [muxer])
   );
 
   const numFlushes = useSyncExternalStore(
     imageMuxerSubscribe,
-    useCallback(() => imageMuxer.numFlushes, [imageMuxer])
+    useCallback(() => muxer.numFlushes, [muxer])
   );
 
   const numFramesProcessed = useSyncExternalStore(
     imageMuxerSubscribe,
-    useCallback(() => imageMuxer.numFramesProcessed, [imageMuxer])
+    useCallback(() => muxer.numFramesProcessed, [muxer])
   );
 
   const readyState = useSyncExternalStore(
     imageMuxerSubscribe,
-    useCallback(() => imageMuxer.readyState, [imageMuxer])
+    useCallback(() => muxer.readyState, [muxer])
   );
 
   const numBytesOriginal = useMemo(() => {
@@ -162,8 +162,8 @@ const Main = () => {
       return;
     }
 
-    imageMuxer.start(sortedFiles, fileHandle, canvas, width, height);
-  }, [height, imageMuxer, sortedFiles, width]);
+    muxer.start(sortedFiles, fileHandle, canvas, width, height);
+  }, [height, muxer, sortedFiles, width]);
 
   const { size: numFiles } = files;
   const busy = !!readyState;
