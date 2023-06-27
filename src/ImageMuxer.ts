@@ -73,7 +73,7 @@ export default class ImageMuxer extends EventTarget {
     // Observable is almost great for this job, but it is not waiting on the next() function.
     const asyncQueue = createAsyncQueue<
       | ['dataavailable', Blob]
-      | ['decode error', Error]
+      | ['decode error', [Error, string]]
       | ['decoded', [ImageBitmap, string]]
       | ['record error', DOMException]
       | ['stop']
@@ -90,7 +90,7 @@ export default class ImageMuxer extends EventTarget {
       if (type === 'decoded') {
         asyncQueue.push([type, [payload, name]]);
       } else if (type === 'decode error') {
-        asyncQueue.push([type, new Error(payload)]);
+        asyncQueue.push([type, [new Error(payload), name]]);
       }
     });
 
@@ -152,7 +152,7 @@ export default class ImageMuxer extends EventTarget {
 
         this.dispatchEvent(
           new ErrorEvent('error', {
-            message: 'Failed to decode image, aborting.'
+            message: `Failed to decode "${payload[1]}", aborting.\n\n${payload[0]}`
           })
         );
       } else if (type === 'record error') {
