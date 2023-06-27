@@ -30,6 +30,7 @@ type SUPPORTED_BIT_RATE = '1000000' | '5000000' | '20000000' | '100000000';
 type SUPPORTED_CODEC = 'h264-mr' | 'h264-wc' | 'vp9';
 type SUPPORTED_FRAME_RATE = '29.97' | '60' | '120';
 
+const BYTES_OPTIONS = { unitSeparator: ' ' };
 const PERFORMANCE_WINDOW_SIZE = 30;
 
 const Main = () => {
@@ -244,7 +245,7 @@ const Main = () => {
         <li>Multiple batches of photos can be added to a single timelapse</li>
         <li>Video size will be based on the size of the first photo</li>
         <li>
-          Video will be encoded at {bitRate === '100000000' ? '100' : '20'} Mbps using{' '}
+          Video will be encoded at {+bitRate / 1000_000} Mbps using{' '}
           {codec === 'h264-mr' || codec === 'h264-wc' ? 'h.264' : 'VP9'} in {codec === 'h264-wc' ? 'MP4' : 'WebM'}{' '}
           container at {frameRate} FPS
         </li>
@@ -321,7 +322,7 @@ const Main = () => {
       <dl>
         <dt>Total number of files</dt>
         <dd>
-          {numFiles} of total {bytes(numBytesOriginal)}{' '}
+          {numFiles} of total {bytes(numBytesOriginal, BYTES_OPTIONS)}{' '}
           <button onClick={handleClearAllFilesClick} type="button">
             Clear all files
           </button>
@@ -335,8 +336,8 @@ const Main = () => {
         <dt>File size</dt>
         <dd>
           {busy
-            ? `${bytes((currentBitRate * timelapseDuration) / 8)} (Estimated)`
-            : `${bytes((+bitRate * timelapseDuration) / 8)} (Projected)`}
+            ? `${bytes((currentBitRate * timelapseDuration) / 8, BYTES_OPTIONS)} (Estimated)`
+            : `${bytes((+bitRate * timelapseDuration) / 8, BYTES_OPTIONS)} (Projected)`}
         </dd>
         <dt>Number of files processed</dt>
         <dd>
@@ -348,7 +349,12 @@ const Main = () => {
         </dd>
         <dt>Bytes written</dt>
         <dd>
-          {started ? `${bytes(numBytesWritten)} in ${numFlushes} batches (${bytes(currentBitRate)}ps)` : 'Not started'}
+          {started
+            ? `${bytes(numBytesWritten, BYTES_OPTIONS)} in ${numFlushes} batches (${bytes(
+                currentBitRate,
+                BYTES_OPTIONS
+              )}ps)`
+            : 'Not started'}
         </dd>
         <dt>Average time to process a frame (from last {PERFORMANCE_WINDOW_SIZE} frames)</dt>
         <dd>
