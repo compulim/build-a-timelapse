@@ -1,4 +1,5 @@
-import React, { FormEventHandler, useCallback, useMemo, useState } from 'react';
+import bytes from 'bytes';
+import React, { FormEventHandler, useCallback, useMemo, useRef, useState } from 'react';
 import random from 'math-random';
 
 import createAsyncQueue from '../util/createAsyncQueue.js';
@@ -20,7 +21,20 @@ const Main = () => {
   const [[width, height], setDimension] = useState<[number, number]>([0, 0]);
   const [busy, setBusy] = useState(false);
   const [files, setFiles] = useState<Map<string, File>>(new Map());
+  const [numBytesWritten, setNumBytesWritten] = useState(0);
+  const [numFlush, setNumFlush] = useState(0);
   const [numFramesProcessed, setNumFramesProcessed] = useState(0);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const numBytesOriginal = useMemo(() => {
+    let nextNumBytesOriginal = 0;
+
+    for (let file of files.values()) {
+      nextNumBytesOriginal += file.size;
+    }
+
+    return nextNumBytesOriginal;
+  }, [files]);
 
   const sortedFiles = useMemo(
     () => Array.from(files.values()).sort(({ name: x }, { name: y }) => (x > y ? 1 : x < y ? -1 : 0)),
@@ -58,6 +72,12 @@ const Main = () => {
       return;
     }
 
+    const { current: canvas } = canvasRef;
+
+    if (!canvas) {
+      return;
+    }
+
     const fileHandle = await window.showSaveFilePicker({
       suggestedName: `timelapse-${random().toString(36).substr(2, 7)}.webm`,
       types: [
@@ -72,8 +92,9 @@ const Main = () => {
     }
 
     setBusy(true);
+    setNumBytesWritten(0);
+    setNumFlush(0);
 
-    const canvas = document.createElement('canvas');
     const writable = await fileHandle.createWritable();
 
     canvas.height = height;
@@ -99,7 +120,7 @@ const Main = () => {
     const asyncQueue = createAsyncQueue<
       | ['dataavailable', Blob]
       | ['decode error', Error]
-      | ['decoded', ImageBitmap]
+      | ['decoded', [ImageBitmap, string]]
       | ['record error', DOMException]
       | ['stop']
     >();
@@ -108,9 +129,9 @@ const Main = () => {
     recorder.addEventListener('dataavailable', ({ data }) => asyncQueue.push(['dataavailable', data]));
     recorder.addEventListener('stop', () => asyncQueue.push(['stop']));
 
-    worker.addEventListener('message', ({ data: [type, data] }) => {
+    worker.addEventListener('message', ({ data: [type, data, name] }) => {
       if (type === 'decoded') {
-        asyncQueue.push([type, data]);
+        asyncQueue.push([type, [data, name]]);
       } else if (type === 'decode error') {
         asyncQueue.push([type, new Error(data)]);
       }
@@ -131,13 +152,26 @@ const Main = () => {
 
       if (type === 'dataavailable') {
         await writable.write({ type: 'write', data: payload });
+
+        setNumBytesWritten(numBytesWritten => numBytesWritten + payload.size);
+        setNumFlush(numFlush => numFlush + 1);
       } else if (type === 'stop') {
         await writable.close();
         setBusy(false);
 
         asyncQueue.close();
       } else if (type === 'decoded') {
-        context.drawImage(await payload, 0, 0);
+        const [imageBitmap, name] = payload;
+
+        if (imageBitmap.height !== height || imageBitmap.width !== width) {
+          recorder.stop();
+
+          return alert(
+            `Failed to draw snapshot "${name}".\n\nResolution is ${imageBitmap.width}x${imageBitmap.height}, expected ${width}x${height}.`
+          );
+        }
+
+        context.drawImage(imageBitmap, 0, 0);
         track.requestFrame();
 
         setNumFramesProcessed(++index);
@@ -157,7 +191,7 @@ const Main = () => {
         alert('Failed to record, aborting.');
       }
     }
-  }, [height, setBusy, setNumFramesProcessed, sortedFiles, width]);
+  }, [height, setBusy, setNumBytesWritten, setNumFlush, setNumFramesProcessed, sortedFiles, width]);
 
   const { size: numFiles } = files;
 
@@ -182,7 +216,7 @@ const Main = () => {
       <dl>
         <dt>Total number of files</dt>
         <dd>
-          {numFiles}{' '}
+          {numFiles} (total {bytes(numBytesOriginal)}){' '}
           <button onClick={handleClearAllFilesClick} type="button">
             Clear all files
           </button>
@@ -194,6 +228,10 @@ const Main = () => {
         <dt>Number of files processed</dt>
         <dd>
           {busy ? `${numFramesProcessed}/${numFiles} (${Math.ceil((numFramesProcessed / numFiles) * 100)}%)` : 'Done'}
+        </dd>
+        <dt>Bytes written</dt>
+        <dd>
+          {bytes(numBytesWritten)} (in {numFlush} batches)
         </dd>
       </dl>
       <details>
@@ -208,6 +246,9 @@ const Main = () => {
       <button disabled={busy || !numFiles} onClick={handleStart} type="button">
         Build timelapse
       </button>
+      <p>
+        <canvas className="rendering-canvas" ref={canvasRef} />
+      </p>
     </main>
   );
 };
