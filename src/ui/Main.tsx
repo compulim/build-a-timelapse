@@ -41,6 +41,31 @@ const Main = () => {
     [files]
   );
 
+  const groupedFiles = useMemo(() => {
+    let lastCounter: number = -Infinity;
+    let lastGroup: File[] = [];
+    let nextGroupedFiles: File[][] = [];
+
+    for (const file of sortedFiles) {
+      const counter = /^DSC(\d+)\.JPE?G$/.exec(file.name)?.[1];
+
+      if (counter) {
+        const counterNumber = +counter;
+
+        if (counterNumber !== lastCounter + 1) {
+          lastGroup = [];
+          nextGroupedFiles.push(lastGroup);
+        }
+
+        lastCounter = counterNumber;
+      }
+
+      lastGroup.push(file);
+    }
+
+    return nextGroupedFiles;
+  }, [sortedFiles]);
+
   const handleChange = useCallback<FormEventHandler<HTMLInputElement>>(
     async ({ currentTarget: { files } }) => {
       if (!files?.length) {
@@ -167,7 +192,7 @@ const Main = () => {
           recorder.stop();
 
           alert(
-            `Failed to draw snapshot "${name}".\n\nResolution is ${imageBitmap.width}x${imageBitmap.height}, expected ${width}x${height}.`
+            `Failed to draw snapshot "${name}".\n\nResolution is ${imageBitmap.width} × ${imageBitmap.height}, expected ${width} × ${height}.`
           );
         } else {
           context.drawImage(imageBitmap, 0, 0);
@@ -216,7 +241,7 @@ const Main = () => {
       <dl>
         <dt>Total number of files</dt>
         <dd>
-          {numFiles} (total {bytes(numBytesOriginal)}){' '}
+          {numFiles} of total {bytes(numBytesOriginal)}{' '}
           <button onClick={handleClearAllFilesClick} type="button">
             Clear all files
           </button>
@@ -231,17 +256,23 @@ const Main = () => {
         </dd>
         <dt>Bytes written</dt>
         <dd>
-          {bytes(numBytesWritten)} (in {numFlush} batches)
+          {bytes(numBytesWritten)} in {numFlush} batches
         </dd>
       </dl>
-      <details>
-        <summary>List of all files</summary>
-        <ul>
-          {sortedFiles.map(({ name }) => (
-            <li>{name}</li>
-          ))}
-        </ul>
-      </details>
+      {!!groupedFiles.length && (
+        <details>
+          <summary>List of all files</summary>
+          <ul>
+            {groupedFiles.map(files => (
+              <li>
+                {files.length > 1
+                  ? `${files[0].name} - ${files[files.length - 1].name} (${files.length} files)`
+                  : files[0].name}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
       <hr />
       <button disabled={busy || !numFiles} onClick={handleStart} type="button">
         Build timelapse
