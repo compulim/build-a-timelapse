@@ -1,7 +1,20 @@
-import React, { useCallback, useState } from 'react';
+import React, { FormEventHandler, useCallback, useState } from 'react';
 import random from 'math-random';
 
 import createAsyncQueue from '../util/createAsyncQueue.js';
+
+declare global {
+  interface Window {
+    showSaveFilePicker(options: {
+      excludeAcceptAllOption?: boolean;
+      suggestedName?: string;
+      types: {
+        description?: string;
+        accept: Record<string, string[]>;
+      }[];
+    }): Promise<FileSystemFileHandle>;
+  }
+}
 
 const Main = () => {
   const [[width, height], setDimension] = useState<[number, number]>([0, 0]);
@@ -9,12 +22,16 @@ const Main = () => {
   const [files, setFiles] = useState<File[]>([]);
   const [numFramesProcessed, setNumFramesProcessed] = useState(0);
 
-  const handleChange = useCallback(
-    async ({ target: { files } }) => {
+  const handleChange = useCallback<FormEventHandler<HTMLInputElement>>(
+    async ({ currentTarget: { files } }) => {
+      if (!files?.length) {
+        return;
+      }
+
       const firstImageBitmap = await createImageBitmap(files[0]);
 
       setDimension([firstImageBitmap.width, firstImageBitmap.height]);
-      setFiles([...files].sort(({ name: x }, { name: y }) => (x > y ? 1 : x < y ? -1 : 0)));
+      setFiles(Array.from(files).sort(({ name: x }, { name: y }) => (x > y ? 1 : x < y ? -1 : 0)));
     },
     [setDimension, setFiles]
   );
@@ -70,7 +87,7 @@ const Main = () => {
       | ['stop']
     >();
 
-    recorder.addEventListener('error', ({ error }) => asyncQueue.push(['record error', error]));
+    recorder.addEventListener('error', event => asyncQueue.push(['record error', (event as any).error]));
     recorder.addEventListener('dataavailable', ({ data }) => asyncQueue.push(['dataavailable', data]));
     recorder.addEventListener('stop', () => asyncQueue.push(['stop']));
 

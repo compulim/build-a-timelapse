@@ -5,8 +5,8 @@ addEventListener('message', async ({ data: [type, blob] }) => {
         const imageBitmap = await createImageBitmap(blob);
 
         postMessage(['decoded', imageBitmap], [imageBitmap]);
-      } catch ({ message }) {
-        postMessage(['decode error', message]);
+      } catch (error) {
+        postMessage(['decode error', (error as any)?.message]);
       }
 
       break;
