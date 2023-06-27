@@ -26,14 +26,18 @@ declare global {
   }
 }
 
+type SUPPORTED_BIT_RATE = '1000000' | '5000000' | '20000000' | '100000000';
+type SUPPORTED_CODEC = 'h264-mr' | 'h264-wc' | 'vp9';
+type SUPPORTED_FRAME_RATE = '29.97' | '60' | '120';
+
 const PERFORMANCE_WINDOW_SIZE = 30;
 
 const Main = () => {
   const [[width, height], setDimension] = useState<[number, number]>([0, 0]);
-  const [bitRate, setBitRate] = useState<'20000000' | '100000000'>('20000000');
-  const [codec, setCodec] = useState<'h264-mr' | 'h264-wc' | 'vp9'>('h264-wc');
+  const [bitRate, setBitRate] = useState<SUPPORTED_BIT_RATE>('20000000');
+  const [codec, setCodec] = useState<SUPPORTED_CODEC>('h264-wc');
   const [files, setFiles] = useState<Map<string, File>>(new Map());
-  const [frameRate, setFrameRate] = useState<string>('29.97');
+  const [frameRate, setFrameRate] = useState<SUPPORTED_FRAME_RATE>('29.97');
   const [savedFilename, setSavedFilename] = useState<string>('');
   const [startTime, setStartTime] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -169,19 +173,19 @@ const Main = () => {
   );
 
   const handleBitrateChange = useCallback<FormEventHandler<HTMLInputElement>>(
-    ({ currentTarget: { value } }) => setBitRate(value as '20000000' | '100000000'),
+    ({ currentTarget: { value } }) => setBitRate(value as SUPPORTED_BIT_RATE),
     [setBitRate]
   );
 
   const handleCodecChange = useCallback<FormEventHandler<HTMLInputElement>>(
-    ({ currentTarget: { value } }) => setCodec(value as 'h264-mr' | 'h264-wc' | 'vp9'),
+    ({ currentTarget: { value } }) => setCodec(value as SUPPORTED_CODEC),
     [setCodec, setFrameRate]
   );
 
   const handleClearAllFilesClick = useCallback(() => setFiles(new Map()), [setFiles]);
 
   const handleFrameRateChange = useCallback<FormEventHandler<HTMLInputElement>>(
-    ({ currentTarget: { value } }) => setFrameRate(value as '29.97' | '60' | '120'),
+    ({ currentTarget: { value } }) => setFrameRate(value as SUPPORTED_FRAME_RATE),
     [setFrameRate]
   );
 
@@ -263,6 +267,12 @@ const Main = () => {
       <p>
         Bit rate:{' '}
         <label>
+          <input checked={bitRate === '1000000'} onChange={handleBitrateChange} type="radio" value="1000000" />1 Mbps
+        </label>
+        <label>
+          <input checked={bitRate === '5000000'} onChange={handleBitrateChange} type="radio" value="5000000" />5 Mbps
+        </label>
+        <label>
           <input checked={bitRate === '20000000'} onChange={handleBitrateChange} type="radio" value="20000000" />
           20 Mbps
         </label>
@@ -325,8 +335,6 @@ const Main = () => {
         <dd>
           {busy
             ? `${bytes((currentBitRate * timelapseDuration) / 8)} (Estimated)`
-            : started
-            ? `${bytes(numBytesWritten)} (Final)`
             : `${bytes((+bitRate * timelapseDuration) / 8)} (Projected)`}
         </dd>
         <dt>Number of files processed</dt>
