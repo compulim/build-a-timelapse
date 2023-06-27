@@ -166,22 +166,22 @@ const Main = () => {
         if (imageBitmap.height !== height || imageBitmap.width !== width) {
           recorder.stop();
 
-          return alert(
+          alert(
             `Failed to draw snapshot "${name}".\n\nResolution is ${imageBitmap.width}x${imageBitmap.height}, expected ${width}x${height}.`
           );
-        }
-
-        context.drawImage(imageBitmap, 0, 0);
-        track.requestFrame();
-
-        setNumFramesProcessed(++index);
-
-        const blob = pendingFiles.shift();
-
-        if (blob) {
-          worker.postMessage(['decode', blob]);
         } else {
-          recorder.stop();
+          context.drawImage(imageBitmap, 0, 0);
+          track.requestFrame();
+
+          setNumFramesProcessed(++index);
+
+          const blob = pendingFiles.shift();
+
+          if (blob) {
+            worker.postMessage(['decode', blob]);
+          } else {
+            recorder.stop();
+          }
         }
       } else if (type === 'decode error') {
         recorder.stop();
