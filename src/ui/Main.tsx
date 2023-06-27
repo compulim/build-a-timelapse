@@ -19,7 +19,7 @@ declare global {
 const Main = () => {
   const [[width, height], setDimension] = useState<[number, number]>([0, 0]);
   const [busy, setBusy] = useState(false);
-  const [files, setFiles] = useState<File[]>([]);
+  const [files, setFiles] = useState<Map<string, File>>(new Map());
   const [numFramesProcessed, setNumFramesProcessed] = useState(0);
 
   const handleChange = useCallback<FormEventHandler<HTMLInputElement>>(
@@ -31,13 +31,25 @@ const Main = () => {
       const firstImageBitmap = await createImageBitmap(files[0]);
 
       setDimension([firstImageBitmap.width, firstImageBitmap.height]);
-      setFiles(Array.from(files).sort(({ name: x }, { name: y }) => (x > y ? 1 : x < y ? -1 : 0)));
+      setFiles(existingFiles => {
+        const nextFiles = new Map(existingFiles);
+
+        for (const file of Array.from(files)) {
+          nextFiles.set(file.name, file);
+        }
+
+        return nextFiles;
+      });
     },
     [setDimension, setFiles]
   );
 
+  const handleClearAllFilesClick = useCallback(() => {
+    setFiles(new Map());
+  }, [setFiles]);
+
   const handleStart = useCallback(async () => {
-    if (!files.length) {
+    if (!files.size) {
       return;
     }
 
@@ -100,7 +112,7 @@ const Main = () => {
     });
 
     let index = 0;
-    const pendingFiles = [...files];
+    const pendingFiles = Array.from(files.values()).sort(({ name: x }, { name: y }) => (x > y ? 1 : x < y ? -1 : 0));
 
     recorder.start();
     worker.postMessage(['decode', pendingFiles.shift()]);
@@ -142,8 +154,10 @@ const Main = () => {
     }
   }, [files, height, setBusy, setNumFramesProcessed, width]);
 
+  const { size: numFiles } = files;
+
   return (
-    <section role="main">
+    <main>
       <h1>Build-a-timelapse</h1>
       <p>
         Build a timelapse video from multiple photos within your browser locally. Your photos will not be uploaded
@@ -156,25 +170,30 @@ const Main = () => {
         <li>Video size will be based on the size of the first photo</li>
         <li>Video will be encoded at 20 Mbps using h.264 in WebM container at 30 FPS</li>
       </ul>
-      <input accept="image/jpeg" disabled={busy} multiple onChange={handleChange} type="file" />
+      <div>
+        Add files to process <input accept="image/jpeg" disabled={busy} multiple onChange={handleChange} type="file" />
+      </div>
       <dl>
         <dt>Total number of files</dt>
-        <dd>{files.length}</dd>
+        <dd>
+          {numFiles}{' '}
+          <button onClick={handleClearAllFilesClick} type="button">
+            Clear all files
+          </button>
+        </dd>
         <dt>Dimension</dt>
         <dd>
           {width} &times; {height}
         </dd>
         <dt>Number of files processed</dt>
         <dd>
-          {busy
-            ? `${numFramesProcessed}/${files.length} (${Math.ceil((numFramesProcessed / files.length) * 100)}%)`
-            : 'Done'}
+          {busy ? `${numFramesProcessed}/${numFiles} (${Math.ceil((numFramesProcessed / numFiles) * 100)}%)` : 'Done'}
         </dd>
       </dl>
-      <button disabled={busy || !files.length} onClick={handleStart} type="button">
+      <button disabled={busy || !numFiles} onClick={handleStart} type="button">
         Start
       </button>
-    </section>
+    </main>
   );
 };
 
