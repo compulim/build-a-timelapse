@@ -248,12 +248,13 @@ const Main = () => {
           {codec === 'h264-mr' || codec === 'h264-wc' ? 'h.264' : 'VP9'} in {codec === 'h264-wc' ? 'MP4' : 'WebM'}{' '}
           container at {frameRate} FPS
         </li>
+        <li>MediaRecorder codecs are not recommend, they yield worse quality</li>
       </ul>
       <p>
         Codec:{' '}
         <label>
           <input checked={codec === 'h264-mr'} onChange={handleCodecChange} type="radio" value="h264-mr" />
-          h.264 (Media Recorder)
+          h.264 (MediaRecorder)
         </label>
         <label>
           <input checked={codec === 'h264-wc'} onChange={handleCodecChange} type="radio" value="h264-wc" />
