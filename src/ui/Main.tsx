@@ -167,6 +167,7 @@ const Main = () => {
       <p>Notes:</p>
       <ul>
         <li>Photos will be sorted by their file names</li>
+        <li>Multiple batches of photos can be added to a single timelapse</li>
         <li>Video size will be based on the size of the first photo</li>
         <li>Video will be encoded at 20 Mbps using h.264 in WebM container at 30 FPS</li>
       </ul>
