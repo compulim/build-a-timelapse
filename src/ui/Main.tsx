@@ -10,7 +10,8 @@ import React, {
 } from 'react';
 import random from 'math-random';
 
-import CanvasMuxer from '../CanvasMuxer.js';
+import MediaRecorderMuxer from '../MediaRecorderMuxer.js';
+import WebCodecsMuxer from '../WebCodecsMuxer.js';
 
 declare global {
   interface Window {
@@ -25,11 +26,18 @@ declare global {
   }
 }
 
+const PERFORMANCE_WINDOW_SIZE = 30;
+
 const Main = () => {
   const [[width, height], setDimension] = useState<[number, number]>([0, 0]);
+  const [codec, setCodec] = useState<'h264' | 'vp9'>('vp9');
   const [files, setFiles] = useState<Map<string, File>>(new Map());
+  const [savedFilename, setSavedFilename] = useState<string>('');
+  const [startTime, setStartTime] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const muxer = useMemo(() => new CanvasMuxer(), []);
+  const lastProgressRef = useRef(0);
+  const muxer = useMemo(() => (codec === 'h264' ? new MediaRecorderMuxer() : new WebCodecsMuxer()), [codec]);
+  const performanceWindowRef = useRef<number[]>([]);
 
   const imageMuxerSubscribe = useCallback<(onStoreChange: () => void) => () => void>(
     callback => {
@@ -84,6 +92,20 @@ const Main = () => {
     return nextNumBytesOriginal;
   }, [files]);
 
+  useMemo(() => {
+    const now = Date.now();
+    const { current: lastProgress } = lastProgressRef;
+
+    if (lastProgress) {
+      const { current: performanceWindow } = performanceWindowRef;
+
+      performanceWindow.push(now - lastProgress);
+      performanceWindow.splice(0, performanceWindow.length - PERFORMANCE_WINDOW_SIZE);
+    }
+
+    lastProgressRef.current = now;
+  }, [numFramesProcessed]);
+
   const sortedFiles = useMemo(
     () => Array.from(files.values()).sort(({ name: x }, { name: y }) => (x > y ? 1 : x < y ? -1 : 0)),
     [files]
@@ -136,6 +158,11 @@ const Main = () => {
     [setDimension, setFiles]
   );
 
+  const handleCodecChange = useCallback<FormEventHandler<HTMLInputElement>>(
+    ({ currentTarget: { value } }) => setCodec(value as 'h264' | 'vp9'),
+    [setCodec]
+  );
+
   const handleClearAllFilesClick = useCallback(() => setFiles(new Map()), [setFiles]);
 
   const handleStart = useCallback(async () => {
@@ -150,7 +177,7 @@ const Main = () => {
     }
 
     const fileHandle = await window.showSaveFilePicker({
-      suggestedName: `timelapse-${random().toString(36).substr(2, 7)}.webm`,
+      suggestedName: `timelapse-${random().toString(36).substr(2, 7)}-${codec}.webm`,
       types: [
         {
           accept: { 'video/webm': ['.webm'] }
@@ -162,11 +189,20 @@ const Main = () => {
       return;
     }
 
+    setSavedFilename(fileHandle.name);
+    setStartTime(Date.now());
+    lastProgressRef.current = 0;
+    performanceWindowRef.current = [];
+
     muxer.start(sortedFiles, fileHandle, canvas, width, height);
-  }, [height, muxer, sortedFiles, width]);
+  }, [height, muxer, setStartTime, sortedFiles, width]);
 
   const { size: numFiles } = files;
   const busy = !!readyState;
+  const timeToProcessInMilliseconds =
+    performanceWindowRef.current.reduce((total, duration) => total + duration, 0) / performanceWindowRef.current.length;
+  const millsecondsElapsed = Date.now() - startTime;
+  const started = !!startTime;
 
   return (
     <main>
@@ -181,8 +217,19 @@ const Main = () => {
         <li>Photos will be sorted by their file names</li>
         <li>Multiple batches of photos can be added to a single timelapse</li>
         <li>Video size will be based on the size of the first photo</li>
-        <li>Video will be encoded at 20 Mbps using h.264 in WebM container at 30 FPS</li>
+        <li>Video will be encoded at 20 Mbps using h.264 or VP9 in WebM container at 30 FPS</li>
       </ul>
+      <div>
+        Codec:{' '}
+        <label>
+          <input checked={codec === 'h264'} onChange={handleCodecChange} type="radio" value="h264" />
+          h.264
+        </label>
+        <label>
+          <input checked={codec === 'vp9'} onChange={handleCodecChange} type="radio" value="vp9" />
+          VP9
+        </label>
+      </div>
       <div>
         Add files to process <input accept="image/jpeg" disabled={busy} multiple onChange={handleChange} type="file" />
       </div>
@@ -198,15 +245,31 @@ const Main = () => {
         <dd>
           {width} &times; {height}
         </dd>
-        <dt>Durartion</dt>
+        <dt>Timelapse duration</dt>
         <dd>{(numFiles / 30).toFixed(1)} seconds</dd>
         <dt>Number of files processed</dt>
         <dd>
-          {busy ? `${numFramesProcessed}/${numFiles} (${Math.ceil((numFramesProcessed / numFiles) * 100)}%)` : 'Done'}
+          {busy
+            ? `${numFramesProcessed}/${numFiles} (${Math.ceil((numFramesProcessed / numFiles) * 100)}%)`
+            : started
+            ? 'Done'
+            : 'Not started'}
         </dd>
         <dt>Bytes written</dt>
+        <dd>{started ? `${bytes(numBytesWritten)} in ${numFlushes} batches` : 'Not started'}</dd>
+        <dt>Average time to process a frame (from last {PERFORMANCE_WINDOW_SIZE} frames)</dt>
         <dd>
-          {bytes(numBytesWritten)} in {numFlushes} batches
+          {started
+            ? `${timeToProcessInMilliseconds.toFixed(1)} ms (${(1000 / timeToProcessInMilliseconds).toFixed(1)} FPS)`
+            : 'Not started'}
+        </dd>
+        <dt>Estimated total time to finish</dt>
+        <dd>{started ? `${((timeToProcessInMilliseconds * numFiles) / 1000).toFixed(1)} seconds` : 'Not started'}</dd>
+        <dt>Estimated time left</dt>
+        <dd>
+          {started
+            ? `${((timeToProcessInMilliseconds * numFiles - millsecondsElapsed) / 1000).toFixed(1)} seconds`
+            : 'Not started'}
         </dd>
       </dl>
       {!!groupedFiles.length && (
@@ -224,9 +287,12 @@ const Main = () => {
         </details>
       )}
       <hr />
-      <button disabled={busy || !numFiles} onClick={handleStart} type="button">
-        Build timelapse
-      </button>
+      <div>
+        <button disabled={busy || !numFiles} onClick={handleStart} type="button">
+          Build timelapse
+        </button>
+        {savedFilename && ` Saved as ${savedFilename}`}
+      </div>
       <p>
         <canvas className="rendering-canvas" ref={canvasRef} />
       </p>

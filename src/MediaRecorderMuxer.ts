@@ -27,7 +27,7 @@ export default class CanvasMuxer extends EventTarget implements Muxer {
     return this.#readyState;
   }
 
-  async start(
+  start(
     sortedFiles: File[],
     fileHandle: FileSystemFileHandle,
     canvas: HTMLCanvasElement,
