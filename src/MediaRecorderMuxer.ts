@@ -6,6 +6,13 @@ import type { Muxer } from './types/Muxer';
 import type { ReadyState } from './types/MuxerReadyState';
 
 export default class CanvasMuxer extends EventTarget implements Muxer {
+  constructor({ bitRate }: { bitRate: number }) {
+    super();
+
+    this.#bitRate = bitRate;
+  }
+
+  #bitRate: number;
   #numBytesWritten: number = 0;
   #numFlushes: number = 0;
   #numFramesProcessed: number = 0;
@@ -61,7 +68,7 @@ export default class CanvasMuxer extends EventTarget implements Muxer {
       const [track] = stream.getVideoTracks() as [CanvasCaptureMediaStreamTrack];
       const recorder = new MediaRecorder(stream, {
         mimeType: 'video/webm;codecs=h264',
-        videoBitsPerSecond: 20_000_000
+        videoBitsPerSecond: this.#bitRate
       });
 
       const worker = new Worker('./static/js/worker.js') as DecodeWorker;

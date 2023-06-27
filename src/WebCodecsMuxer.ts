@@ -7,10 +7,6 @@ import decodeImageAsImageBitmap from './util/decodeImageAsImageBitmap';
 import type { Muxer as IMuxer } from './types/Muxer';
 import type { ReadyState } from './types/MuxerReadyState';
 
-const BITRATE = 20000000;
-// const BITRATE = 10e6;
-const FRAMERATE = 30;
-
 // It seems HEVC is not enabled in Chrome yet.
 // https://github.com/StaZhu/enable-chromium-hevc-hardware-decoding
 
@@ -22,7 +18,6 @@ const FRAMERATE = 30;
 // } as { codec: 'hevc' };
 
 // const VIDEO_ENCODER_CONFIG = {
-//   bitrate: BITRATE,
 //   codec: 'hvc1.1.6.L93.B0',
 //   // codec: 'hev1.1.6.L120.90',
 //   framerate: FRAMERATE
@@ -33,12 +28,19 @@ const MUXER_CONFIG = {
 };
 
 const VIDEO_ENCODER_CONFIG = {
-  bitrate: BITRATE,
-  codec: 'vp09.00.10.08',
-  framerate: FRAMERATE
+  codec: 'vp09.00.10.08'
 };
 
 export default class WebCodecsMuxer extends EventTarget implements IMuxer {
+  constructor({ bitRate, frameRate }: { bitRate: number; frameRate: number }) {
+    super();
+
+    this.#bitRate = bitRate;
+    this.#frameRate = frameRate;
+  }
+
+  #bitRate: number;
+  #frameRate: number;
   #numBytesWritten: number = 0;
   #numFlushes: number = 0;
   #numFramesProcessed: number = 0;
@@ -85,7 +87,13 @@ export default class WebCodecsMuxer extends EventTarget implements IMuxer {
 
         const context = canvas.getContext('2d');
 
-        const config: VideoEncoderConfig = { ...VIDEO_ENCODER_CONFIG, height, width };
+        const config: VideoEncoderConfig = {
+          ...VIDEO_ENCODER_CONFIG,
+          bitrate: this.#bitRate,
+          framerate: this.#frameRate,
+          height,
+          width
+        };
 
         const isSupported = await VideoEncoder.isConfigSupported(config);
 
@@ -134,7 +142,7 @@ export default class WebCodecsMuxer extends EventTarget implements IMuxer {
                   context?.drawImage?.(frame, 0, 0);
 
                   const timestampedVideoFrame = new VideoFrame(frame, {
-                    timestamp: (this.#numFramesProcessed++ * 1000000) / FRAMERATE
+                    timestamp: (this.#numFramesProcessed++ * 1000000) / this.#frameRate
                   });
 
                   try {
