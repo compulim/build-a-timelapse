@@ -90,7 +90,7 @@ export default class WebCodecsMuxer extends EventTarget implements IMuxer {
         const context = canvas.getContext('2d');
 
         const config: VideoEncoderConfig = {
-          // h.264 Level 5.1 = 4K
+          // h.264 Level 5.1 (0x33) = 4K
           // https://en.wikipedia.org/wiki/Advanced_Video_Coding#Levels
           codec: this.#codec === 'h264' ? 'avc1.420033' : 'vp09.00.10.08',
           bitrate: this.#bitRate,
