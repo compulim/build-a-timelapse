@@ -9,7 +9,7 @@ addEventListener('message', async ({ data: [type, file] }: { data: WorkMessage }
 
         postMessage(['decoded', imageBitmap, file.name] as ResultMessage, [imageBitmap]);
       } catch (error) {
-        postMessage(['decode error', (error as any)?.message] as ResultMessage);
+        postMessage(['decode error', (error as any)?.message, file.name] as ResultMessage);
       }
 
       break;
