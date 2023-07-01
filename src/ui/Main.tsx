@@ -29,6 +29,7 @@ declare global {
 type SUPPORTED_BIT_RATE = '1000000' | '5000000' | '20000000' | '100000000';
 type SUPPORTED_CODEC = 'h264-mr' | 'h264-wc' | 'vp9';
 type SUPPORTED_FRAME_RATE = '29.97' | '60' | '120';
+type SUPPORTED_SORTED_BY = 'filename' | 'date';
 
 const BYTES_OPTIONS = { unitSeparator: ' ' };
 const PERFORMANCE_WINDOW_SIZE = 30;
@@ -40,6 +41,7 @@ const Main = () => {
   const [files, setFiles] = useState<Map<string, File>>(new Map());
   const [frameRate, setFrameRate] = useState<SUPPORTED_FRAME_RATE>('29.97');
   const [savedFilename, setSavedFilename] = useState<string>('');
+  const [sortedBy, setSortedBy] = useState<string>('filename');
   const [startTime, setStartTime] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const lastProgressRef = useRef(0);
@@ -122,17 +124,32 @@ const Main = () => {
   }, [numFramesProcessed]);
 
   const sortedFiles = useMemo(
-    () => Array.from(files.values()).sort(({ name: x }, { name: y }) => (x > y ? 1 : x < y ? -1 : 0)),
-    [files]
+    () =>
+      sortedBy === 'filename'
+        ? Array.from(files.values()).sort(({ name: x }, { name: y }) => (x > y ? 1 : x < y ? -1 : 0))
+        : Array.from(files.values()).sort((x, y) => {
+            if (x.lastModified > y.lastModified) {
+              return 1;
+            } else if (x.lastModified < y.lastModified) {
+              return -1;
+            } else if (x.name > y.name) {
+              return 1;
+            } else if (x.name < y.name) {
+              return -1;
+            }
+
+            return 0;
+          }),
+    [files, sortedBy]
   );
 
-  const groupedFiles = useMemo(() => {
+  const groupedFiles = useMemo<File[][]>(() => {
     let lastCounter: number = -Infinity;
     let lastGroup: File[] = [];
     let nextGroupedFiles: File[][] = [];
 
     for (const file of sortedFiles) {
-      const counter = /^DSC(\d+)\.JPE?G$/.exec(file.name)?.[1];
+      const counter = /^DSC(\d+)\.JPE?G$/u.exec(file.name)?.[1];
 
       if (counter) {
         const counterNumber = +counter;
@@ -164,7 +181,7 @@ const Main = () => {
         const nextFiles = new Map(existingFiles);
 
         for (const file of Array.from(files)) {
-          nextFiles.set(file.name, file);
+          nextFiles.set(`${file.name}|${file.lastModified}`, file);
         }
 
         return nextFiles;
@@ -188,6 +205,11 @@ const Main = () => {
   const handleFrameRateChange = useCallback<FormEventHandler<HTMLInputElement>>(
     ({ currentTarget: { value } }) => setFrameRate(value as SUPPORTED_FRAME_RATE),
     [setFrameRate]
+  );
+
+  const handleSortedByChange = useCallback<FormEventHandler<HTMLInputElement>>(
+    ({ currentTarget: { value } }) => setSortedBy(value as SUPPORTED_SORTED_BY),
+    [setSortedBy]
   );
 
   const handleStart = useCallback(async () => {
@@ -314,6 +336,17 @@ const Main = () => {
             value="120"
           />
           120
+        </label>
+      </p>
+      <p>
+        Sorted by:{' '}
+        <label>
+          <input checked={sortedBy === 'filename'} onChange={handleSortedByChange} type="radio" value="filename" />
+          Filename
+        </label>
+        <label>
+          <input checked={sortedBy === 'date'} onChange={handleSortedByChange} type="radio" value="date" />
+          Last modified
         </label>
       </p>
       <p>
