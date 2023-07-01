@@ -26,7 +26,7 @@ declare global {
   }
 }
 
-type SUPPORTED_BIT_RATE = '1000000' | '5000000' | '20000000' | '100000000';
+type SUPPORTED_BIT_RATE = '1000000' | '5000000' | '20000000' | '100000000' | '200000000' | '500000000';
 type SUPPORTED_CODEC = 'h264-mr' | 'h264-wc' | 'vp9';
 type SUPPORTED_FRAME_RATE = '29.97' | '60' | '120';
 type SUPPORTED_SORTED_BY = 'filename' | 'date';
@@ -303,6 +303,14 @@ const Main = () => {
         <label>
           <input checked={bitRate === '100000000'} onChange={handleBitrateChange} type="radio" value="100000000" />
           100 Mbps
+        </label>
+        <label>
+          <input checked={bitRate === '200000000'} onChange={handleBitrateChange} type="radio" value="200000000" />
+          200 Mbps
+        </label>
+        <label>
+          <input checked={bitRate === '500000000'} onChange={handleBitrateChange} type="radio" value="500000000" />
+          500 Mbps
         </label>
       </p>
       <p>
