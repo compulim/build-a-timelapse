@@ -227,7 +227,7 @@ const Main = () => {
       suggestedName: `timelapse-${random().toString(36).substr(2, 7)}-${codec}.${codec === 'h264-wc' ? 'mp4' : 'webm'}`,
       types: [
         {
-          accept: { 'video/webm': ['.webm'] }
+          accept: codec === 'h264-wc' ? { 'video/mp4': ['.mp4'] } : { 'video/webm': ['.webm'] }
         }
       ]
     });
