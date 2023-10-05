@@ -31,6 +31,8 @@ import type { ReadyState } from './types/MuxerReadyState';
 //   framerate: FRAMERATE
 // };
 
+const KEYFRAME_INTERVAL_IN_MILLISECOND = 5000;
+
 export default class WebCodecsMuxer extends EventTarget implements IMuxer {
   constructor({ bitRate, codec, frameRate }: { bitRate: number; codec: 'h264' | 'vp9'; frameRate: number }) {
     super();
@@ -140,6 +142,8 @@ export default class WebCodecsMuxer extends EventTarget implements IMuxer {
             try {
               videoEncoder.configure(config);
 
+              let numFrameSinceKeyframe = 0;
+
               for (let file of sortedFiles) {
                 const frame = await decodeImageAsImageBitmap(file);
 
@@ -156,7 +160,16 @@ export default class WebCodecsMuxer extends EventTarget implements IMuxer {
                   });
 
                   try {
-                    videoEncoder.encode(timestampedVideoFrame);
+                    let options: undefined | VideoEncoderEncodeOptions = undefined;
+
+                    // We need to add keyframe at least once every 32.768s.
+                    // "Current Matroska cluster exceeded its maximum allowed length of 32768 milliseconds. In order to produce a correct WebM file, you must pass in a video key frame at least every 32768 milliseconds."
+                    if ((numFrameSinceKeyframe++ * 1000) / this.#frameRate >= KEYFRAME_INTERVAL_IN_MILLISECOND) {
+                      options = { keyFrame: true };
+                      numFrameSinceKeyframe = 0;
+                    }
+
+                    videoEncoder.encode(timestampedVideoFrame, options);
 
                     await videoEncoder.flush();
                   } finally {

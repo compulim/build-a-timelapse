@@ -36,8 +36,8 @@ const PERFORMANCE_WINDOW_SIZE = 30;
 
 const Main = () => {
   const [[width, height], setDimension] = useState<[number, number]>([0, 0]);
-  const [bitRate, setBitRate] = useState<SUPPORTED_BIT_RATE>('20000000');
-  const [codec, setCodec] = useState<SUPPORTED_CODEC>('h264-wc');
+  const [bitRate, setBitRate] = useState<SUPPORTED_BIT_RATE>('500000000');
+  const [codec, setCodec] = useState<SUPPORTED_CODEC>('vp9');
   const [files, setFiles] = useState<Map<string, File>>(new Map());
   const [frameRate, setFrameRate] = useState<SUPPORTED_FRAME_RATE>('29.97');
   const [savedFilename, setSavedFilename] = useState<string>('');
